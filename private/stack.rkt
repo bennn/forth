@@ -1,5 +1,8 @@
 #lang racket/base
 
+;; Forth stacks,
+;;  data definition & operations
+
 (provide
   ;; type Stack = List
   ;; 

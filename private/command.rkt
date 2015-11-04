@@ -29,6 +29,7 @@
 
 (require
  racket/match
+ forth/private/stack
  (only-in racket/string string-join)
  (only-in racket/port with-input-from-string)
 )
@@ -38,7 +39,7 @@
 
 (struct command (
   id ;; : Symbol
-  exec ;; : (-> Any (U 'EXIT #f Any))
+  exec ;; : (-> Env State Any (U 'EXIT #f (Pairof Env State)))
   descr ;; : String
 ) #:transparent
   #:property prop:procedure
@@ -48,7 +49,7 @@
 (define CMD* (list
   (command
     'exit
-    (lambda (v)
+    (lambda (E S v)
       (if (or (eof-object? v)
               (and (symbol? v)
                    (exit? v))
@@ -60,7 +61,7 @@
     "End the REPL session")
   (command
    'help
-   (lambda (v)
+   (lambda (E S v)
      (cond
       [(and (symbol? v) (help? v))
        (show-help)]
@@ -69,41 +70,104 @@
       [else
        #f]))
    "Print help information")
-  ;; (command
-  ;;  '+
-  ;;  )
-  ;; (command
-  ;;  '-
-  ;;  )
-  ;; (command
-  ;;  '*
-  ;;  )
-  ;; (command
-  ;;  '/
-  ;;  )
-  ;; (command
-  ;;  'dup
-  ;;  )
-  ;; (command
-  ;;  'drop
-  ;;  )
-  ;; (command
-  ;;  'swap
-  ;;  )
-  ;; (command
-  ;;  'over
-  ;;  )
-  ;; (command
-  ;;  'define
-  ;;  )
+  (command
+   '+
+   (lambda (E S v)
+     (match v
+      ['(+)
+       (let*-values ([(v1 S1) (stack-pop S)]
+                     [(v2 S2) (stack-pop S1)])
+         (values E (stack-push S2 (+ v1 v2))))]
+      [_ #f]))
+   "Add the top two numbers on the stack.")
+  (command
+   '-
+   (lambda (E S v)
+     (match v
+      ['(-)
+       (let*-values ([(v1 S1) (stack-pop S)]
+                     [(v2 S2) (stack-pop S1)])
+         (values E (stack-push S2 (- v1 v2))))]
+      [_ #f]))
+   "Subtract the top item of the stack from the second item.")
+  (command
+   '*
+   (lambda (E S v)
+     (match v
+      ['(*)
+       (let*-values ([(v1 S1) (stack-pop S)]
+                     [(v2 S2) (stack-pop S1)])
+         (values E (stack-push S2 (* v1 v2))))]
+      [_ #f]))
+   "Multiply the top two item on the stack.")
+  (command
+   '/
+   (lambda (E S v)
+     (match v
+      ['(/)
+       (let*-values ([(v1 S1) (stack-pop S)]
+                     [(v2 S2) (stack-pop S1)])
+         (values E (stack-push S2 (/ v1 v2))))]
+      [_ #f]))
+   "Divide the top item of the stack by the second item.")
+  (command
+   'define
+   (lambda (E S v)
+     (match v
+      [(cons ': (cons w defn*))
+       (define cmd
+         (command w
+                  (lambda (E S v)
+                    (if (equal? v (list w))
+                        (for/fold ([e E] [s S])
+                                  ([d (in-list defn*)])
+                            (forth-eval e s (list d)))
+                        #f))
+                  (format "~a" defn*)))
+       (values (cons cmd E) S)]
+      [_ #f]))
+   "Define a new command as a sequence of existing commands")
+  (command
+   'drop
+   (lambda (E S v)
+     (match v
+       ['(drop)
+        (values E (stack-drop S))]
+       [_ #f]))
+   "Drop the top item from the stack")
+  (command
+   'dup
+   (lambda (E S v)
+     (match v
+       ['(dup)
+        (values E (stack-dup S))]
+       [_ #f]))
+     "Duplicate the top item of the stack")
+  (command
+   'over
+   (lambda (E S v)
+     (match v
+       ['(over)
+        (values E (stack-over S))]
+       [_ #f]))
+   "Duplicate the top item of the stack, but place the duplicate in the third position of the stack.")
+  (command
+   'push
+   (lambda (E S v)
+     (match v
+       [`(push ,(? number? n))
+        (values E (stack-push S v))]
+       [_ #f]))
+   "Push a number onto the stack")
+  (command
+   'swap
+   (lambda (E S v)
+     (match v
+       ['(swap)
+        (values E (stack-swap S))]
+       [_ #f]))
+   "Swap the first two numbers on the stack")
 ))
-
-(define HELP-STR
-  (string-join
-    (for/list ([c (in-list CMD*)])
-      (format "    ~a : ~a" (command-id c) (command-descr c)))
-    "\n"
-    #:before-first "Available commands:\n"))
 
 ;; (: exit? (-> Symbol Boolean))
 (define (exit? sym)
@@ -117,7 +181,13 @@
 (define (help? sym)
   (memq sym '(help ? ??? -help --help h)))
 
-(define (show-help [v #f])
+(define (show-help E [v #f])
+  (define HELP-STR
+    (string-join
+     (for/list ([c (in-list E)])
+       (format "    ~a : ~a" (command-id c) (command-descr c)))
+     "\n"
+     #:before-first "Available commands:\n"))
   (match v
     [#f HELP-STR]
     [(or (list (? symbol? s))
@@ -139,7 +209,7 @@
     (forth-eval e s (forth-tokenize ln))))
 
 (define (forth-eval E S token*)
-  (match (for/or ([c (in-list CMD*)]) (c E S token*))
+  (match (for/or ([c (in-list E)]) (c E S token*))
     ['EXIT
      ;; TODO should 'break' from the outer recursion
      (values E S)]

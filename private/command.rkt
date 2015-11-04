@@ -4,7 +4,7 @@
 
 (provide
   forth-eval*
-  ;; (-> Env Stack Input-Port Stack)
+  ;; (-> Input-Port Stack)
   ;; Reads lines from the input port until exhausted.
   ;; Each line is interpreted as a Forth command and evaluated with
   ;;  the current stack & environment.
@@ -20,9 +20,6 @@
   
   ;; type Env = Listof Command
 
-  env-init
-  ;; (-> Env)
-  ;; Create an base command environment
 )
 
 ;; -----------------------------------------------------------------------------
@@ -65,7 +62,7 @@
      (cond
       [(and (symbol? v) (help? v))
        (show-help)]
-      [(and (list? v) (help? (car v)))
+      [(and (list? v) (not (null? v)) (help? (car v)))
        (show-help (cdr v))]
       [else
        #f]))
@@ -77,7 +74,7 @@
       ['(+)
        (let*-values ([(v1 S1) (stack-pop S)]
                      [(v2 S2) (stack-pop S1)])
-         (values E (stack-push S2 (+ v1 v2))))]
+         (cons E (stack-push S2 (+ v1 v2))))]
       [_ #f]))
    "Add the top two numbers on the stack.")
   (command
@@ -87,7 +84,7 @@
       ['(-)
        (let*-values ([(v1 S1) (stack-pop S)]
                      [(v2 S2) (stack-pop S1)])
-         (values E (stack-push S2 (- v1 v2))))]
+         (cons E (stack-push S2 (- v1 v2))))]
       [_ #f]))
    "Subtract the top item of the stack from the second item.")
   (command
@@ -97,7 +94,7 @@
       ['(*)
        (let*-values ([(v1 S1) (stack-pop S)]
                      [(v2 S2) (stack-pop S1)])
-         (values E (stack-push S2 (* v1 v2))))]
+         (cons E (stack-push S2 (* v1 v2))))]
       [_ #f]))
    "Multiply the top two item on the stack.")
   (command
@@ -107,7 +104,7 @@
       ['(/)
        (let*-values ([(v1 S1) (stack-pop S)]
                      [(v2 S2) (stack-pop S1)])
-         (values E (stack-push S2 (/ v1 v2))))]
+         (cons E (stack-push S2 (/ v1 v2))))]
       [_ #f]))
    "Divide the top item of the stack by the second item.")
   (command
@@ -124,7 +121,7 @@
                             (forth-eval e s (list d)))
                         #f))
                   (format "~a" defn*)))
-       (values (cons cmd E) S)]
+       (cons (cons cmd E) S)]
       [_ #f]))
    "Define a new command as a sequence of existing commands")
   (command
@@ -132,7 +129,7 @@
    (lambda (E S v)
      (match v
        ['(drop)
-        (values E (stack-drop S))]
+        (cons E (stack-drop S))]
        [_ #f]))
    "Drop the top item from the stack")
   (command
@@ -140,7 +137,7 @@
    (lambda (E S v)
      (match v
        ['(dup)
-        (values E (stack-dup S))]
+        (cons E (stack-dup S))]
        [_ #f]))
      "Duplicate the top item of the stack")
   (command
@@ -148,7 +145,7 @@
    (lambda (E S v)
      (match v
        ['(over)
-        (values E (stack-over S))]
+        (cons E (stack-over S))]
        [_ #f]))
    "Duplicate the top item of the stack, but place the duplicate in the third position of the stack.")
   (command
@@ -156,7 +153,9 @@
    (lambda (E S v)
      (match v
        [`(push ,(? number? n))
-        (values E (stack-push S v))]
+        (cons E (stack-push S n))]
+       [(? number? n)
+        (cons E (stack-push S n))]
        [_ #f]))
    "Push a number onto the stack")
   (command
@@ -164,7 +163,7 @@
    (lambda (E S v)
      (match v
        ['(swap)
-        (values E (stack-swap S))]
+        (cons E (stack-swap S))]
        [_ #f]))
    "Swap the first two numbers on the stack")
 ))
@@ -202,11 +201,14 @@
 ;; -----------------------------------------------------------------------------
 
 ;; (: forth-eval* (-> Env Stack Input-Port Stack))
-(define (forth-eval* E S in)
-  (for/fold ([e E]
-             [s S])
+(define (forth-eval* in)
+  (for/fold ([e CMD*]
+             [s (stack-init)])
             ([ln (in-lines in)])
-    (forth-eval e s (forth-tokenize ln))))
+    (define token* (forth-tokenize ln))
+    (if (null? token*)
+        (values e s)
+        (forth-eval e s token*))))
 
 (define (forth-eval E S token*)
   (match (for/or ([c (in-list E)]) (c E S token*))
@@ -229,11 +231,8 @@
                      [(? eof-object?) '()]
                      [val (cons val (loop))]))))))
 
-(define (forth-repl E S)
+(define (forth-repl [E CMD*] [S (stack-init)])
   (error 'forth-repl "Not implemented!"))
-
-(define (env-init)
-  CMD*)
 
 ;; =============================================================================
 
@@ -261,8 +260,5 @@
    
 
   ;; -- forth-repl
-  
-  ;; -- env-init
-  (check-not-equal? (env-init) '())
 
 )

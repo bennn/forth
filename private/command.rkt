@@ -26,7 +26,7 @@
 (require
  racket/match
  forth/private/stack
- (only-in racket/string string-join)
+ (only-in racket/string string-join string-split)
  (only-in racket/port with-input-from-string)
  (for-syntax racket/base racket/syntax syntax/parse)
 )
@@ -93,9 +93,11 @@
    (lambda (E S v)
      (cond
       [(and (symbol? v) (help? v))
-       (show-help)]
+       (displayln (show-help E))
+       (cons E S)]
       [(and (list? v) (not (null? v)) (help? (car v)))
-       (show-help (cdr v))]
+       (displayln (show-help E (and (not (null? (cdr v))) (cdr v))))
+       (cons E S)]
       [else
        #f]))
    "Print help information")
@@ -136,32 +138,43 @@
         (cons E (stack-push S n))]
        [_ #f]))
    "Push a number onto the stack")
+  (command
+   'show
+   (lambda (E S v)
+     (match v
+       [`(,(? show?))
+        (displayln S)
+        (cons E S)]
+       [_ #f]))
+   "Print the current stack")
 ))
 
 ;; (: exit? (-> Symbol Boolean))
 (define (exit? sym)
   (memq sym '(exit quit q leave bye)))
 
-(define (find-command sym)
-  (for/first ([c (in-list CMD*)]
+(define (find-command E sym)
+  (for/first ([c (in-list E)]
               #:when (eq? sym (command-id c)))
     c))
 
 (define (help? sym)
   (memq sym '(help ? ??? -help --help h)))
 
+(define (show? sym)
+  (memq sym '(show print pp ls stack)))
+
 (define (show-help E [v #f])
-  (define HELP-STR
-    (string-join
-     (for/list ([c (in-list E)])
-       (format "    ~a : ~a" (command-id c) (command-descr c)))
-     "\n"
-     #:before-first "Available commands:\n"))
   (match v
-    [#f HELP-STR]
+    [#f
+     (string-join
+      (for/list ([c (in-list E)])
+        (format "    ~a : ~a" (command-id c) (command-descr c)))
+      "\n"
+      #:before-first "Available commands:\n")]
     [(or (list (? symbol? s))
          (? symbol? s))
-     (define c (find-command s))
+     (define c (find-command E s))
      (if c
          (command-descr c)
          (format "Unknown command '~a'" s))]
@@ -170,7 +183,7 @@
 
 ;; -----------------------------------------------------------------------------
 
-;; (: forth-eval* (-> Env Stack Input-Port Stack))
+;; (: forth-eval* (-> Input-Port Stack))
 (define (forth-eval* in)
   (for/fold ([e CMD*]
              [s (stack-init)])
@@ -183,6 +196,18 @@
      [else
       (forth-eval e s token*)])))
 
+;; (: forth-repl (->* [] [Env Stack] Void))
+(define (forth-repl [E CMD*] [S (stack-init)])
+  (display "forth> ")
+  (define token* (forth-tokenize (read-line)))
+  (if (null? token*)
+      (displayln S)
+      (let-values ([(E+ S+) (forth-eval E S token*)])
+        (if (not (list? E+))
+            (displayln S+)
+            (forth-repl E+ S+)))))
+
+;; (: forth-eval (-> Env Stack (Listof Any) (Values (U Env #f) Stack)))
 (define (forth-eval E S token*)
   (match (for/or ([c (in-list E)]) (c E S token*))
     ['EXIT
@@ -203,33 +228,158 @@
                      [(? eof-object?) '()]
                      [val (cons val (loop))]))))))
 
-(define (forth-repl [E CMD*] [S (stack-init)])
-  (error 'forth-repl "Not implemented!"))
-
 ;; =============================================================================
 
 (module+ test
-  (require rackunit rackunit-abbrevs)
+  (require
+   rackunit
+   rackunit-abbrevs
+   (only-in racket/format ~a))
   
   ;; -- exit?
-  ;; (check-true* exit?
+  (check-true* (lambda (x) (if (exit? x) #t #f))
+   ['exit]
+   ['quit]
+   ['q])
 
+  (check-false* exit?
+   ['()]
+   [#f]
+   [53]
+   ['hello])
+ 
   ;; -- find-command
+  (check-true* (lambda (sym) (eq? sym (command-id (find-command CMD* sym))))
+   ['exit]
+   ['dup]
+   ['+])
+
+  (check-false* (lambda (sym) (if (find-command CMD* sym) #t #f))
+   ['hi]
+   ['hi]
+   ["yes"]
+   [00])
 
   ;; -- help?
+  (check-true* (lambda (v) (if (help? v) #t #f))
+   ['help]
+   ['?]
+   ['--help])
+
+  (check-false* help?
+   ['exit]
+   [#f]
+   ['q]
+   [21])
+
+  ;; -- show?
+  (check-true* (lambda (v) (if (show? v) #t #f))
+   ['show]
+   ['ls]
+   ['print])
+
+  (check-false* help?
+   ['exit]
+   [#f]
+   ['q]
+   [12])
 
   ;; -- show-help
+  (check-equal? (length (string-split (show-help CMD*) "\n")) (+ 1 (length CMD*)))
+  (check-equal? (length (string-split (show-help CMD* #f) "\n")) (+ 1 (length CMD*)))
+  (check-regexp-match #rx"^Cannot help" (show-help CMD* "booo"))
+  (check-regexp-match #rx"^Unknown command" (show-help CMD* 'booo))
+  (check-regexp-match #rx"^Print help" (show-help CMD* 'help))
   
   ;; -- forth-eval*
+  (let* ([eval* (lambda (v*)
+                  (with-input-from-string (string-join (map ~a v*) "\n")
+                    (lambda () (forth-eval* (current-input-port)))))]
+         [eval/stack (lambda (v*) (let-values ([(e s) (eval* v*)]) s))])
+    (check-apply* eval/stack
+     ['(1 2 3)
+      == '(3 2 1)]
+     ['(1 1 +)
+      == '(2)]
+     ['(2 1 -)
+      == '(-1)]
+     ['(8 8 8 * *)
+      == '(512)]
+     ['(2 3 1 /)
+      == '(1/3 2)]
+     ['(0 1 EXIT /)
+      == '(1 0)]
+     ['(": dup3 dup dup dup" 1 2 dup3)
+      == '(2 2 2 2 1)]
+     ['(1 2 drop)
+      == '(1)]
+     ['(1 2 3 over)
+      == '(3 2 3 1)]
+     ['(1 0 swap)
+      == '(1 0)]
+     ['(": switcheroo swap swap" 5 6 switcheroo switcheroo)
+      == '(6 5)]
+     ['("push 1" "push 2" +)
+      == '(3)]))
 
   ;; -- forth-eval
+  (let* ([S '(2 4 8)]
+         [E CMD*]
+         [eval/stack (lambda (token*)
+                       (let-values ([(e s) (forth-eval E S token*)]) s))])
+  (check-apply* eval/stack
+   [#f
+    == S]
+   ['nada
+    == S]
+   ['(exit)
+    == S]
+   ['(help)
+    == S]
+   ['(: hi 3 2 1)
+    == S]
+   ['(+)
+    == '(6 8)]
+   ['(-)
+    == '(-2 8)]
+   ['(*)
+    == '(8 8)]
+   ['(/)
+    == '(1/2 8)]
+   ['(drop)
+    == (stack-drop S)]
+   ['(dup)
+    == (stack-dup S)]
+   ['(over)
+    == (stack-over S)]
+   ['(swap)
+    == (stack-swap S)]
+   ['(1)
+    == (stack-push S 1)]
+   ['(push 8)
+    == (stack-push S 8)]
+   ['(show)
+    == S]))
+
+  (let* ([S '(6 6 6)]
+         [E CMD*]
+         [L (length E)]
+         [eval/env-length (lambda (token*)
+                     (let-values ([(e s) (forth-eval E S token*)]) (length e)))])
+    (check-apply* eval/env-length
+     ['(2)
+      == L]
+     ['(: new dup drop swap)
+      == (+ 1 L)]
+     ['(swap)
+      == L]))
 
   ;; -- forth-tokenize
   (check-apply* forth-tokenize
    ["hello world" == '(hello world)]
    ["Hello WORLD" == '(hello world)]
-  )
-   
+   [": key val val val;" == '(: key val val val)]
+   ["1 2 3" == '(1 2 3)])
 
   ;; -- forth-repl
 

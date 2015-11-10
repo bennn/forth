@@ -132,7 +132,7 @@
    'define
    (lambda (E S v)
      (match v
-      [(cons ': (cons w defn*))
+      [(cons (or ': 'define) (cons w defn*))
        (define cmd
          (command w
                   (lambda (E S v)

@@ -19,7 +19,6 @@
     (strip-context
      #`(module forth-program racket/base
          (require forth/private/stack forth/private/command)
-         ;; TODO save envionrment/stack?
          (define stack '#,S)
          stack))))
 
@@ -29,4 +28,4 @@
   ;; Maybe, move this to a main.rkt file
   (require xrepl forth/private/stack forth/private/command)
   (forth-repl)
-)
+) 

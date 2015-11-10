@@ -130,7 +130,7 @@
      (match v
        [`(push ,(? number? n))
         (cons E (stack-push S n))]
-       [(? number? n)
+       [`(,(? number? n))
         (cons E (stack-push S n))]
        [_ #f]))
    "Push a number onto the stack")
@@ -170,20 +170,21 @@
 
 ;; (: forth-eval* (-> Env Stack Input-Port Stack))
 (define (forth-eval* in)
-  ;; TODO let loop
   (for/fold ([e CMD*]
              [s (stack-init)])
-            ([ln (in-lines in)])
+      ([ln (in-lines in)])
     (define token* (forth-tokenize ln))
-    (if (null? token*)
-        (values e s)
-        (forth-eval e s token*))))
+    (cond
+     [(or (null? token*)
+          (not (list? e))) ;; Cheap way to detect EXIT
+      (values e s)]
+     [else
+      (forth-eval e s token*)])))
 
 (define (forth-eval E S token*)
   (match (for/or ([c (in-list E)]) (c E S token*))
     ['EXIT
-     ;; TODO should 'break' from the outer recursion
-     (values E S)]
+     (values #f S)]
     [#f
      ;; TODO suggest command
      (printf "Unrecognized command '~a'.\n" token*)

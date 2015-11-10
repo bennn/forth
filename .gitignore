@@ -6,3 +6,5 @@ compiled/
 *\.js
 *\.css
 *\.html
+
+coverage/

@@ -1,5 +1,7 @@
 Forth
 =====
+[![Build Status](https://travis-ci.org/bennn/forth.svg)](https://travis-ci.org/bennn/forth)
+[![Coverage Status](https://coveralls.io/repos/bennn/forth/badge.svg?branch=master&service=github)](https://coveralls.io/github/bennn/forth?branch=master)
 
 Forth emulator! Implemented as a Racket `#lang`.
 

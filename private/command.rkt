@@ -19,7 +19,6 @@
   ;; ---
   
   ;; type Env = Listof Command
-
 )
 
 ;; -----------------------------------------------------------------------------
@@ -29,6 +28,7 @@
  forth/private/stack
  (only-in racket/string string-join)
  (only-in racket/port with-input-from-string)
+ (for-syntax racket/base racket/syntax syntax/parse)
 )
 
 ;; =============================================================================
@@ -42,6 +42,38 @@
   #:property prop:procedure
   (struct-field-index exec))
 ;; (define-type Command command)
+
+(define (singleton-list? v)
+  (and (list? v)
+       (not (null? v))
+       (null? (cdr v))))
+
+;; Create a binary operation command.
+;; Command is recognized by its identifier,
+;;  the identifier is then applied to the top 2 numbers on the stack.
+(define-syntax binop-command
+  (syntax-parser
+   [(_ name:id doc:str)
+    #:with name-sym (syntax->datum #'name)
+    #'(command 'name-sym
+               (lambda (E S v)
+                 (and (singleton-list? v)
+                      (eq? 'name-sym (car v))
+                      (let*-values ([(v1 S1) (stack-pop S)]
+                                    [(v2 S2) (stack-pop S1)])
+                        (cons E (stack-push S2 (name v1 v2))))))
+               doc)]))
+
+(define-syntax stack-command
+  (syntax-parser #:literals (quote)
+   [(_ (quote cmd:id) doc:str)
+    #:with stack-cmd (format-id #'cmd "stack-~a" (syntax->datum #'cmd))
+    #'(command 'cmd
+               (lambda (E S v)
+                 (and (singleton-list? v)
+                      (eq? 'cmd (car v))
+                      (cons E (stack-cmd S))))
+               doc)]))
 
 (define CMD* (list
   (command
@@ -68,46 +100,6 @@
        #f]))
    "Print help information")
   (command
-   '+
-   (lambda (E S v)
-     (match v
-      ['(+)
-       (let*-values ([(v1 S1) (stack-pop S)]
-                     [(v2 S2) (stack-pop S1)])
-         (cons E (stack-push S2 (+ v1 v2))))]
-      [_ #f]))
-   "Add the top two numbers on the stack.")
-  (command
-   '-
-   (lambda (E S v)
-     (match v
-      ['(-)
-       (let*-values ([(v1 S1) (stack-pop S)]
-                     [(v2 S2) (stack-pop S1)])
-         (cons E (stack-push S2 (- v1 v2))))]
-      [_ #f]))
-   "Subtract the top item of the stack from the second item.")
-  (command
-   '*
-   (lambda (E S v)
-     (match v
-      ['(*)
-       (let*-values ([(v1 S1) (stack-pop S)]
-                     [(v2 S2) (stack-pop S1)])
-         (cons E (stack-push S2 (* v1 v2))))]
-      [_ #f]))
-   "Multiply the top two item on the stack.")
-  (command
-   '/
-   (lambda (E S v)
-     (match v
-      ['(/)
-       (let*-values ([(v1 S1) (stack-pop S)]
-                     [(v2 S2) (stack-pop S1)])
-         (cons E (stack-push S2 (/ v1 v2))))]
-      [_ #f]))
-   "Divide the top item of the stack by the second item.")
-  (command
    'define
    (lambda (E S v)
      (match v
@@ -124,30 +116,14 @@
        (cons (cons cmd E) S)]
       [_ #f]))
    "Define a new command as a sequence of existing commands")
-  (command
-   'drop
-   (lambda (E S v)
-     (match v
-       ['(drop)
-        (cons E (stack-drop S))]
-       [_ #f]))
-   "Drop the top item from the stack")
-  (command
-   'dup
-   (lambda (E S v)
-     (match v
-       ['(dup)
-        (cons E (stack-dup S))]
-       [_ #f]))
-     "Duplicate the top item of the stack")
-  (command
-   'over
-   (lambda (E S v)
-     (match v
-       ['(over)
-        (cons E (stack-over S))]
-       [_ #f]))
-   "Duplicate the top item of the stack, but place the duplicate in the third position of the stack.")
+  (binop-command + "Add the top two numbers on the stack")
+  (binop-command - "Subtract the top item of the stack from the second item.")
+  (binop-command * "Multiply the top two item on the stack.")
+  (binop-command / "Divide the top item of the stack by the second item.")
+  (stack-command 'drop "Drop the top item from the stack")
+  (stack-command 'dup  "Duplicate the top item of the stack")
+  (stack-command 'over "Duplicate the top item of the stack, but place the duplicate in the third position of the stack.")
+  (stack-command 'swap "Swap the first two numbers on the stack")
   (command
    'push
    (lambda (E S v)
@@ -158,14 +134,6 @@
         (cons E (stack-push S n))]
        [_ #f]))
    "Push a number onto the stack")
-  (command
-   'swap
-   (lambda (E S v)
-     (match v
-       ['(swap)
-        (cons E (stack-swap S))]
-       [_ #f]))
-   "Swap the first two numbers on the stack")
 ))
 
 ;; (: exit? (-> Symbol Boolean))
@@ -202,6 +170,7 @@
 
 ;; (: forth-eval* (-> Env Stack Input-Port Stack))
 (define (forth-eval* in)
+  ;; TODO let loop
   (for/fold ([e CMD*]
              [s (stack-init)])
             ([ln (in-lines in)])

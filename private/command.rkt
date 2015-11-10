@@ -108,9 +108,11 @@
          (command w
                   (lambda (E S v)
                     (if (equal? v (list w))
-                        (for/fold ([e E] [s S])
-                                  ([d (in-list defn*)])
-                            (forth-eval e s (list d)))
+                        (let-values ([(e+ s+)
+                                      (for/fold ([e E] [s S])
+                                          ([d (in-list defn*)])
+                                        (forth-eval e s (list d)))])
+                          (cons e+ s+))
                         #f))
                   (format "~a" defn*)))
        (cons (cons cmd E) S)]

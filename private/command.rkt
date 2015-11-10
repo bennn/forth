@@ -101,25 +101,6 @@
       [else
        #f]))
    "Print help information")
-  (command
-   'define
-   (lambda (E S v)
-     (match v
-      [(cons ': (cons w defn*))
-       (define cmd
-         (command w
-                  (lambda (E S v)
-                    (if (equal? v (list w))
-                        (let-values ([(e+ s+)
-                                      (for/fold ([e E] [s S])
-                                          ([d (in-list defn*)])
-                                        (forth-eval e s (list d)))])
-                          (cons e+ s+))
-                        #f))
-                  (format "~a" defn*)))
-       (cons (cons cmd E) S)]
-      [_ #f]))
-   "Define a new command as a sequence of existing commands")
   (binop-command + "Add the top two numbers on the stack")
   (binop-command - "Subtract the top item of the stack from the second item.")
   (binop-command * "Multiply the top two item on the stack.")
@@ -147,6 +128,25 @@
         (cons E S)]
        [_ #f]))
    "Print the current stack")
+  (command
+   'define
+   (lambda (E S v)
+     (match v
+      [(cons ': (cons w defn*))
+       (define cmd
+         (command w
+                  (lambda (E S v)
+                    (if (equal? v (list w))
+                        (let-values ([(e+ s+)
+                                      (for/fold ([e E] [s S])
+                                          ([d (in-list defn*)])
+                                        (forth-eval e s (list d)))])
+                          (cons e+ s+))
+                        #f))
+                  (format "~a" defn*)))
+       (cons (cons cmd E) S)]
+      [_ #f]))
+   "Define a new command as a sequence of existing commands")
 ))
 
 ;; (: exit? (-> Symbol Boolean))
@@ -223,10 +223,20 @@
 (define (forth-tokenize str)
   (parameterize ([read-case-sensitive #f]) ;; Converts symbols to lowercase
     (with-input-from-string str
-      (lambda () (let loop ()
-                   (match (read)
-                     [(? eof-object?) '()]
-                     [val (cons val (loop))]))))))
+      (lambda () 
+        (de-nest
+         (let loop ()
+           (match (read)
+             [(? eof-object?) '()]
+             [val (cons val (loop))])))))))
+
+(define (de-nest v*)
+  (if (and (list? v*)
+           (not (null? v*))
+           (list? (car v*))
+           (null? (cdr v*)))
+      (de-nest (car v*))
+      v*))
 
 ;; =============================================================================
 
@@ -378,9 +388,15 @@
   (check-apply* forth-tokenize
    ["hello world" == '(hello world)]
    ["Hello WORLD" == '(hello world)]
+   ["(((Hello WORLD)))" == '(hello world)]
    [": key val val val;" == '(: key val val val)]
    ["1 2 3" == '(1 2 3)])
 
-  ;; -- forth-repl
+  ;; -- de-nest
+  (check-apply* de-nest
+   ['a == 'a]
+   ['(a) == '(a)]
+   ['(((a))) == '(a)]
+   ['(((a)) b) == '(((a)) b)])
 
 )

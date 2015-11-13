@@ -17,7 +17,7 @@
   ;;  repeats.
 
   ;; ---
-  
+
   ;; type Env = Listof Command
 )
 
@@ -61,7 +61,7 @@
                       (eq? 'name-sym (car v))
                       (let*-values ([(v1 S1) (stack-pop S)]
                                     [(v2 S2) (stack-pop S1)])
-                        (cons E (stack-push S2 (name v1 v2))))))
+                        (cons E (stack-push S2 (name v2 v1))))))
                doc)]))
 
 (define-syntax stack-command
@@ -312,13 +312,13 @@
      ['(1 1 +)
       == '(2)]
      ['(2 1 -)
-      == '(-1)]
+      == '(1)]
      ['(8 8 8 * *)
       == '(512)]
-     ['(2 3 1 /)
+     ['(2 1 3 /)
       == '(1/3 2)]
-     ['(0 1 EXIT /)
-      == '(1 0)]
+     ['(1 0 EXIT /)
+      == '(0 1)]
      ['(": dup3 dup dup dup" 1 2 dup3)
       == '(2 2 2 2 1)]
      ['(1 2 drop)
@@ -351,11 +351,11 @@
    ['(+)
     == '(6 8)]
    ['(-)
-    == '(-2 8)]
+    == '(2 8)]
    ['(*)
     == '(8 8)]
    ['(/)
-    == '(1/2 8)]
+    == '(2 8)]
    ['(drop)
     == (stack-drop S)]
    ['(dup)

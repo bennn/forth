@@ -5,7 +5,7 @@
 
 (provide
   ;; type Stack = List
-  ;; 
+  ;;
   ;; Notation:
   ;;  []    = empty stack
   ;;  x::xs = item 'x' on top of the stack 'xs'
@@ -84,7 +84,7 @@
 (module+ test
 
   (require rackunit)
-  
+
   (define exn-rx #rx"empty stack")
 
   (define-syntax-rule (check-stack-exn e)

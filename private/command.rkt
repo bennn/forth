@@ -1,6 +1,10 @@
 #lang racket/base
 
-;; Forth commands
+;; Forth commands, parsing and executing.
+
+;; The evaluator keeps two pieces of state:
+;; - E : an environment of commands
+;; - S : a stack of numbers
 
 (provide
   forth-eval*
@@ -10,7 +14,7 @@
   ;;  the current stack & environment.
 
   forth-repl
-  ;; (-> Env Stack Void)
+  ;; (-> Void)
   ;; Prompts the user for input,
   ;;  evaluates the input Forth expression,
   ;;  updates the current stack and environment,
@@ -34,15 +38,26 @@
 ;; =============================================================================
 ;; -- Commands
 
+;; A Forth command is implemented as a callable struct.
+;; For example:
+;;   (define f (lambda arg* ...))
+;;   (define c (command 'hello f "A simple command"))
+;;   (c 4)
+;; Calls the command struct `c` with the argument 4.
+;; Normally calling a struct is an error, but since we declared `command`
+;;  with the property `prop:procedure`, the call gets redirected to the struct
+;;  field `exec`. i.e. `(c 4)` is the same as `(f 4)`.
+
 (struct command (
-  id ;; : Symbol
-  exec ;; : (-> Env State Any (U 'EXIT #f (Pairof Env State)))
+  id    ;; : Symbol
+  exec  ;; : (-> Env State Any (U 'EXIT #f (Pairof Env State)))
   descr ;; : String
 ) #:transparent
   #:property prop:procedure
   (struct-field-index exec))
 ;; (define-type Command command)
 
+;; True if the argument is a list with one element
 (define (singleton-list? v)
   (and (list? v)
        (not (null? v))
@@ -64,6 +79,7 @@
                         (cons E (stack-push S2 (name v2 v1))))))
                doc)]))
 
+;; Turns a symbol into a stack command parser
 (define-syntax stack-command
   (syntax-parser #:literals (quote)
    [(_ (quote cmd:id) doc:str)
@@ -75,6 +91,7 @@
                       (cons E (stack-cmd S))))
                doc)]))
 
+;; Default environment of commands
 (define CMD* (list
   (command
     'exit
@@ -149,21 +166,26 @@
    "Define a new command as a sequence of existing commands")
 ))
 
-;; (: exit? (-> Symbol Boolean))
+;; (: exit? (-> Any Boolean))
 (define (exit? sym)
   (memq sym '(exit quit q leave bye)))
 
+;; Search the environment for a command with `id` equal to `sym`
 (define (find-command E sym)
   (for/first ([c (in-list E)]
               #:when (eq? sym (command-id c)))
     c))
 
+;; (: help? (-> Any Boolean))
 (define (help? sym)
   (memq sym '(help ? ??? -help --help h)))
 
+;; (: show? (-> Any Boolean))
 (define (show? sym)
   (memq sym '(show print pp ls stack)))
 
+;; Print a help message.
+;; If the optional argument is given, try to print information about it.
 (define (show-help E [v #f])
   (match v
     [#f
@@ -182,6 +204,10 @@
      (format "Cannot help with '~a'" x)]))
 
 ;; -----------------------------------------------------------------------------
+
+;; The machinery for running commands.
+;; Parses strings & ports to S-expressions,
+;;  and feeds those expressions to the structs in the command environment.
 
 ;; (: forth-eval* (-> Input-Port Stack))
 (define (forth-eval* in)
@@ -218,7 +244,7 @@
      (values E S)]
     [E+S
      (values (car E+S) (cdr E+S))]))
-     
+
 ;; (: forth-tokenize (-> String (Listof Any)))
 (define (forth-tokenize str)
   (parameterize ([read-case-sensitive #f]) ;; Converts symbols to lowercase
@@ -230,6 +256,7 @@
              [(? eof-object?) '()]
              [val (cons val (loop))])))))))
 
+;; Remove all parentheses around a singleton list
 (define (de-nest v*)
   (if (and (list? v*)
            (not (null? v*))
@@ -240,12 +267,15 @@
 
 ;; =============================================================================
 
+;; Unit tests. Run these with:
+;;   raco test command.rkt
+
 (module+ test
   (require
    rackunit
    rackunit-abbrevs
    (only-in racket/format ~a))
-  
+
   ;; -- exit?
   (check-true* (lambda (x) (if (exit? x) #t #f))
    ['exit]
@@ -300,7 +330,7 @@
   (check-regexp-match #rx"^Cannot help" (show-help CMD* "booo"))
   (check-regexp-match #rx"^Unknown command" (show-help CMD* 'booo))
   (check-regexp-match #rx"^Print help" (show-help CMD* 'help))
-  
+
   ;; -- forth-eval*
   (let* ([eval* (lambda (v*)
                   (with-input-from-string (string-join (map ~a v*) "\n")

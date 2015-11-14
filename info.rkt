@@ -10,7 +10,7 @@
   "rackunit-lib"
   "rackunit-abbrevs"))
 (define pkg-desc "Forth emulator")
-(define version "0.0")
+(define version "0.1")
 (define pkg-authors '(ben))
 (define scribblings '(("scribblings/forth.scrbl")))
 (define raco-commands '(("forth" (submod forth main) "Open a Forth REPL session" #f)))

@@ -42,7 +42,7 @@ swap
 To open an interactive session, run `raco forth`.
 
 
-#lang Details
+`#lang` Details
 ---
 
 The call to `raco` installs `forth` as a new language.

@@ -3,8 +3,6 @@
 (define collection "forth")
 (define deps '("base"))
 (define build-deps '(
-  "cover"
-  "cover-coveralls"
   "scribble-lib"
   "racket-doc"
   "rackunit-lib"

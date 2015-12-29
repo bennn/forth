@@ -5,7 +5,7 @@
 @; TODO can we use the REPL in examples?
 @(define forth-eval (make-base-eval '(require forth/private/command)))
 
-@title[#:tag "top"]{@bold{Forth}}
+@title[#:tag "top"]{Forth}
 @author[@hyperlink["https://github.com/bennn"]{Ben Greenman}]
 
 @defmodule[forth]

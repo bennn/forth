@@ -10,5 +10,5 @@
 (define pkg-desc "Forth emulator")
 (define version "0.1")
 (define pkg-authors '(ben))
-(define scribblings '(("scribblings/forth.scrbl")))
+(define scribblings '(("scribblings/forth.scrbl" () (omit-start))))
 (define raco-commands '(("forth" (submod forth main) "Open a Forth REPL session" #f)))

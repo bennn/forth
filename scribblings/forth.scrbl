@@ -96,4 +96,9 @@ dup
 swap
 -
 swap
+
+: incr 1 +
+incr
+incr
++
 )

@@ -2,6 +2,7 @@ Forth
 =====
 [![Build Status](https://travis-ci.org/bennn/forth.svg)](https://travis-ci.org/bennn/forth)
 [![Coverage Status](https://coveralls.io/repos/bennn/forth/badge.svg?branch=master&service=github)](https://coveralls.io/github/bennn/forth?branch=master)
+[![Scribble](https://img.shields.io/badge/Docs-Scribble-blue.svg)](http://docs.racket-lang.org/forth/index.html)
 
 Forth emulator! Implemented as a Racket `#lang`.
 
@@ -29,14 +30,18 @@ All files starting with `#lang forth` are interpreted as a sequence of Forth com
 ```
 #lang forth
 
+push 2      ;; add `2` to the stack
 push 2
-push 2
-+
-dup
-2
-swap
++           ;; add the top two numbers on the stack
+dup         ;; duplicate head of stack
+2           ;; short for `push 2`
+swap        ;; swap order of top 2 stack arguments
 -
-swap
+
+: incr 1 +  ;; define a new command `incr`
+incr
+incr
++
 ```
 
 To open an interactive session, run `raco forth`.

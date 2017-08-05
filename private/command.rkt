@@ -30,6 +30,7 @@
 (require
  racket/match
  forth/private/stack
+ (only-in racket/list drop-right last)
  (only-in racket/string string-join string-split)
  (only-in racket/port with-input-from-string)
  (for-syntax racket/base racket/syntax syntax/parse)
@@ -149,7 +150,11 @@
    'define
    (lambda (E S v)
      (match v
-      [(cons (or ': 'define) (cons w defn*))
+      [(cons (or ': 'define) (cons w pre-defn*))
+       (define defn*
+         (if (eq? '|;| (last pre-defn*))
+           (drop-right pre-defn* 1)
+           pre-defn*))
        (define cmd
          (command w
                   (lambda (E S v)
@@ -247,23 +252,9 @@
 
 ;; (: forth-tokenize (-> String (Listof Any)))
 (define (forth-tokenize str)
-  (parameterize ([read-case-sensitive #f]) ;; Converts symbols to lowercase
-    (with-input-from-string str
-      (lambda () 
-        (de-nest
-         (let loop ()
-           (match (read)
-             [(? eof-object?) '()]
-             [val (cons val (loop))])))))))
-
-;; Remove all parentheses around a singleton list
-(define (de-nest v*)
-  (if (and (list? v*)
-           (not (null? v*))
-           (list? (car v*))
-           (null? (cdr v*)))
-      (de-nest (car v*))
-      v*))
+  (for/list ([word (in-list (string-split str))])
+    (define n (string->number word))
+    (or n (string->symbol (string-downcase word)))))
 
 ;; =============================================================================
 
@@ -418,15 +409,9 @@
   (check-apply* forth-tokenize
    ["hello world" == '(hello world)]
    ["Hello WORLD" == '(hello world)]
-   ["(((Hello WORLD)))" == '(hello world)]
-   [": key val val val;" == '(: key val val val)]
+   [": key val val val;" == '(: key val val |val;|)]
+   [": key val val val ;" == '(: key val val val |;|)]
+   [": DOUBLE 2 *;" == '(: double 2 |*;|)]
    ["1 2 3" == '(1 2 3)])
-
-  ;; -- de-nest
-  (check-apply* de-nest
-   ['a == 'a]
-   ['(a) == '(a)]
-   ['(((a))) == '(a)]
-   ['(((a)) b) == '(((a)) b)])
 
 )

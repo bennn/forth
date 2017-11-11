@@ -1,6 +1,6 @@
 #lang forth
 
-: DOUBLE 2 *;
+: DOUBLE 2 * ;
 
 10
 DOUBLE

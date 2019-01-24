@@ -3,7 +3,7 @@ Forth
 [![Build Status](https://travis-ci.org/bennn/forth.svg)](https://travis-ci.org/bennn/forth)
 [![Scribble](https://img.shields.io/badge/Docs-Scribble-blue.svg)](http://docs.racket-lang.org/forth/index.html)
 
-Forth emulator! Implemented as a Racket `#lang`.
+Forth language! Implemented as a Racket `#lang`.
 
 
 Install
